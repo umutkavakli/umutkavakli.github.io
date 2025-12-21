@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Posts on umut&#39;s blog</title>
+    <link>https://umutkavakli.github.io/posts/</link>
+    <description>Recent content in Posts on umut&#39;s blog</description>
+    <generator>Hugo -- 0.153.1</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 18 Sep 2025 12:05:30 +0300</lastBuildDate>
+    <atom:link href="https://umutkavakli.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Backpropagation Through Matrix Multiplication</title>
+      <link>https://umutkavakli.github.io/posts/2025-09-18-backpropagation-through-matrix-multiplication/</link>
+      <pubDate>Thu, 18 Sep 2025 12:05:30 +0300</pubDate>
+      <guid>https://umutkavakli.github.io/posts/2025-09-18-backpropagation-through-matrix-multiplication/</guid>
+      <description>&lt;p&gt;&lt;strong&gt;TL;DR&lt;/strong&gt; &lt;br&gt;
+In this long and technical blog, I explained:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Forward propagation:&lt;/strong&gt; How inputs flow through the network layer by layer (using matrix operations) to generate predictions.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Computation Graph:&lt;/strong&gt; How simple scalar examples help visualize backpropagation and build intuition before scaling up.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Backward propagation:&lt;/strong&gt; How errors flow backward (again with matrix operations) to compute gradients and update weights.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;p&gt;Backpropagation appears quite straightforward when working with scalars or even simple vectors. However, once we step into the world of matrices, things quickly become more complex and difficult to follow. There are extra details and notations that make it less intuitive.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
