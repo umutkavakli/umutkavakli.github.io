@@ -6,8 +6,21 @@
     <description>Recent content in Posts on umut&#39;s blog</description>
     <generator>Hugo -- 0.153.1</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 18 Sep 2025 12:05:30 +0300</lastBuildDate>
+    <lastBuildDate>Sat, 10 Jan 2026 23:13:49 +0100</lastBuildDate>
     <atom:link href="https://umutkavakli.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Online Softmax in Attention Mechanism</title>
+      <link>https://umutkavakli.github.io/posts/2026-01-10-online-softmax/</link>
+      <pubDate>Sat, 10 Jan 2026 23:13:49 +0100</pubDate>
+      <guid>https://umutkavakli.github.io/posts/2026-01-10-online-softmax/</guid>
+      <description>&lt;p&gt;&lt;strong&gt;Code Repository:&lt;/strong&gt; &lt;a href=&#34;https://github.com/umutkavakli/online-softmax&#34;&gt;github.com/umutkavakli/online-softmax&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;As sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.&lt;/p&gt;
+&lt;figure class=&#34;align-center &#34;&gt;
+    &lt;img loading=&#34;lazy&#34; src=&#34;images/onlinesoftmax.png#center&#34;/&gt; 
+&lt;/figure&gt;
+
+&lt;p&gt;The &lt;a href=&#34;https://en.wikipedia.org/wiki/Softmax_function&#34;&gt;softmax&lt;/a&gt; function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:&lt;/p&gt;</description>
+    </item>
     <item>
       <title>Backpropagation Through Matrix Multiplication</title>
       <link>https://umutkavakli.github.io/posts/2025-09-18-backpropagation-through-matrix-multiplication/</link>

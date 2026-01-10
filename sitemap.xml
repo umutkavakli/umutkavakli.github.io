@@ -2,13 +2,16 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://umutkavakli.github.io/posts/2025-09-18-backpropagation-through-matrix-multiplication/</loc>
-    <lastmod>2025-09-18T12:05:30+03:00</lastmod>
+    <loc>https://umutkavakli.github.io/posts/2026-01-10-online-softmax/</loc>
+    <lastmod>2026-01-10T23:13:49+01:00</lastmod>
   </url><url>
     <loc>https://umutkavakli.github.io/posts/</loc>
-    <lastmod>2025-09-18T12:05:30+03:00</lastmod>
+    <lastmod>2026-01-10T23:13:49+01:00</lastmod>
   </url><url>
     <loc>https://umutkavakli.github.io/</loc>
+    <lastmod>2026-01-10T23:13:49+01:00</lastmod>
+  </url><url>
+    <loc>https://umutkavakli.github.io/posts/2025-09-18-backpropagation-through-matrix-multiplication/</loc>
     <lastmod>2025-09-18T12:05:30+03:00</lastmod>
   </url><url>
     <loc>https://umutkavakli.github.io/archives/</loc>

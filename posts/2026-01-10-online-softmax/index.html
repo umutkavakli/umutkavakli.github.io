@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Online Softmax in Attention Mechanism | umut&#39;s blog</title>
+<meta name="keywords" content="">
+<meta name="description" content="Code Repository: github.com/umutkavakli/online-softmax
+As sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.
+
+     
+
+
+The softmax function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:">
+<meta name="author" content="Author: Umut Kaan Kavaklı">
+<link rel="canonical" href="https://umutkavakli.github.io/posts/2026-01-10-online-softmax/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://umutkavakli.github.io/assets/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://umutkavakli.github.io/assets/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://umutkavakli.github.io/assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://umutkavakli.github.io/assets/apple-touch-icon.png">
+<link rel="mask-icon" href="https://umutkavakli.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://umutkavakli.github.io/posts/2026-01-10-online-softmax/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.css" integrity="sha384-MlJdn/WNKDGXveldHDdyRP1R4CTHr3FeuDNfhsLPYrq2t0UBkUdK2jyTnXPEK1NQ" crossorigin="anonymous">
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/katex.min.js" integrity="sha384-VQ8d8WVFw0yHhCk5E8I86oOhv48xLpnDZx5T9GogA/Y84DcCKWXDmSDfn13bzFZY" crossorigin="anonymous"></script>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.2/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+        delimiters: [
+            {left: "$$", right: "$$", display: true},
+            {left: "$", right: "$", display: false}
+        ]
+    });
+});
+</script>
+<meta property="og:url" content="https://umutkavakli.github.io/posts/2026-01-10-online-softmax/">
+  <meta property="og:site_name" content="umut&#39;s blog">
+  <meta property="og:title" content="Online Softmax in Attention Mechanism">
+  <meta property="og:description" content="Code Repository: github.com/umutkavakli/online-softmax
+As sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.
+The softmax function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:">
+  <meta property="og:locale" content="en-us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-01-10T23:13:49+01:00">
+    <meta property="article:modified_time" content="2026-01-10T23:13:49+01:00">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Online Softmax in Attention Mechanism">
+<meta name="twitter:description" content="Code Repository: github.com/umutkavakli/online-softmax
+As sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.
+
+     
+
+
+The softmax function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://umutkavakli.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Online Softmax in Attention Mechanism",
+      "item": "https://umutkavakli.github.io/posts/2026-01-10-online-softmax/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Online Softmax in Attention Mechanism",
+  "name": "Online Softmax in Attention Mechanism",
+  "description": "Code Repository: github.com/umutkavakli/online-softmax\nAs sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.\nThe softmax function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:\n",
+  "keywords": [
+    
+  ],
+  "articleBody": "Code Repository: github.com/umutkavakli/online-softmax\nAs sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.\nThe softmax function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:\n$$ \\text{Attention(Q, K, V)} = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}} \\right) V $$\nWhen we calculate the dot product of queries and keys, we get an $N \\times N$ a sequence of length $N$. This creates a major problem because the time and memory needed grow at a quadratic rate $O(N^2)$:\nFor very long sequences, a single GPU cannot store the entire attention matrix. The Ring Attention paper highlights just how extreme this memory demand can be:\nTo put the memory demand in perspective, even when dealing with a batch size of 1, processing 100 million tokens requires over 1000 GB of memory for a modest model with a hidden size of 1024.\nTo solve this, we can split the attention matrix into smaller blocks and run calculations on those blocks individually:\nProcessing in blocks is a great idea, but the standard softmax function makes it difficult because it needs the sum of every element in the sequence to calculate the denominator.\nNaive Softmax The standard softmax formula is defined as:\n$$ \\text{Softmax}(x_i) = \\frac{\\exp(x_i)}{\\sum_{j=1}^{N} \\exp(x_j)} $$\nWe can write a simple version of this in PyTorch:\nimport torch def naive_softmax(x: torch.Tensor) -\u003e torch.Tensor: return x.exp() / x.exp().sum() If we compare this naive function to the official PyTorch version, the results look identical for small numbers:\nx = torch.randn(8) reference = torch.softmax(x, dim=-1) naive = naive_softmax(x) print(f\"Torch: {reference}\") print(f\"Naive: {naive}\") print(f\"allclose: {torch.allclose(reference, naive)}\") # Output Torch: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) Naive: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) allclose: True However, this naive version is not stable. When the input values are large, the exponential function grows too fast and causes a numerical overflow. This results in “nan” errors in naive softmax:\nnaive_softmax(x * 1000) # Output tensor([0., 0., nan, nan, 0., 0., 0., 0.]) Safe Softmax Softmax has the shift invariance property. This means that if we add or subtract the same constant from every input, the output stays the same. We can use this to keep our numbers small and manageable. By subtracting the maximum value from the entire vector, we ensure that the largest exponent is exactly zero.\n$$ \\begin{align*} \\text{SafeSoftmax}(x_i) \u0026= \\frac{\\exp(x_i)}{\\sum_{j=1}^{N} \\exp(x_j)} \\cdot \\frac{\\exp(- \\max_{k=1}^{N} x_k)}{\\exp(- \\max_{k=1}^{N} x_k)} \\\\ \\\\ \u0026= \\frac{\\exp(x_i - \\max_{k=1}^{N} x_k)}{\\sum_{j=1}^{N} \\exp(x_j - \\max_{k=1}^{N} x_k)} \\end{align*} $$\nBy doing this, every exponent is less than or equal to zero, which completely prevents overflow. Here is how we implement it:\ndef safe_softmax(x: torch.Tensor) -\u003e torch.Tensor: m = x.max() return (x - m).exp() / (x - m).exp().sum() reference = torch.softmax(x, dim=-1) safe = safe_softmax(x) print(f\"Torch: {reference}\") print(f\"Safe: {safe}\") print(f\"allclose: {torch.allclose(reference, safe)}\") # Output Torch: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) Safe: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) allclose: True This version is also stable for large inputs:\nsafe_softmax(x * 1000) # Output tensor([0., 0., 1., 0., 0., 0., 0., 0.]) Online Softmax In the attention mechanism, we apply softmax row by row. To calculate the denominator for a single query, we need to access every single key vector in that row. This global dependency is exactly what makes it hard to process the matrix in chunks:\nOnline softmax allows us to calculate the result step by step. If we track the local maximum $m$ and the local sum $d$ for each small block, we can update them as we move through the sequence. When we receive a new element $x_S$, we update our statistics like this:\n$$ \\begin{align*} m_S \u0026\\leftarrow \\max(m_{S-1}, x_S) \\\\ \\\\ d_S \u0026\\leftarrow d_{S-1} \\cdot\\exp(m_{S-1} - m_S) + \\exp(x_{S} - m_S) \\end{align*} $$\nClick for the proof $$ \\begin{align*} m_S \u0026\\leftarrow \\max(m_{S-1}, x_S) \\\\ \u0026= \\max(\\max_{k=1}^{S-1} x_k, x_S) \\\\ \u0026= \\max_{k=1}^{S} x_k \\\\ \\\\ d_S \u0026\\leftarrow d_{S-1} \\cdot\\exp(m_{S-1} - m_S) + \\exp(x_{S} - m_S) \\\\ \u0026= \\left(\\sum_{j=1}^{S-1} \\exp(x_j - {\\color{red} \\cancel{m_{S-1}}}) \\right) \\cdot \\exp({\\color{red} \\cancel{m_{S-1}}} - m_S) + \\exp(x_{S} - m_S) \\\\ \u0026= \\left(\\sum_{j=1}^{S-1} \\exp(x_j - m_{S}) \\right) + \\exp(x_{S} - m_S) \\\\ \u0026= \\sum_{j=1}^{S} \\exp(x_j - m_{S}) \\end{align*} $$\nThis logic allows us to merge several local results into one global distribution. If we have $B$ blocks, each with its own max value $m_i$ and sum $d_i$, we can combine them by rescaling the local probabilities. This approach perfectly matches the standard softmax output:\n$$ \\begin{align*} \\text{OnlineSoftmax}(p_i, m_i, d_i) \u0026= \\frac{p_i \\cdot d_i \\cdot \\exp(m_i -\\max_{k=1}^{B})}{\\sum_{j=1}^B d_j \\cdot \\exp(m_j - \\max_{k=1}^{B})} \\\\ \\end{align*} $$\nClick for the proof $$ \\begin{align*} \\text{OnlineSoftmax}(p_i, m_i, d_i) \u0026= \\frac{p_i \\cdot d_i \\cdot \\exp(m_i -\\max_{k=1}^{B})}{\\sum_{j=1}^B d_j \\cdot \\exp(m_j - \\max_{k=1}^{B})} \\\\ \\\\ \u0026= \\frac{\\frac{\\exp(x_i - m_i)}{{\\color{red} \\cancel{d_i}}} \\cdot {\\color{red} \\cancel{d_i}} \\cdot \\exp(m_i -\\max_{k=1}^{B})}{\\sum_{j=1}^B d_j \\cdot \\exp(m_j - \\max_{k=1}^{B})} \\\\ \\\\ \u0026= \\frac{\\exp(x_i - {\\color{red} \\cancel{m_i}}) \\cdot \\exp({\\color{red} \\cancel{m_i}} -\\max_{k=1}^{B})}{\\sum_{j=1}^B d_j \\cdot \\exp(m_j - \\max_{k=1}^{B})} \\\\ \\\\ \u0026= \\frac{\\exp(x_i -\\max_{k=1}^{B})}{\\sum_{j=1}^B d_j \\cdot \\exp(m_j - \\max_{k=1}^{B})} \\\\ \\\\ \u0026= \\frac{\\exp(x_i -\\max_{k=1}^{B})}{\\sum_{j=1}^B \\left[\\sum_{l=1}^{S_j} \\exp(x_l - {\\color{red} \\cancel{m_i}}) \\right] \\cdot \\exp({\\color{red} \\cancel{m_i}} - \\max_{k=1}^{B})} \\\\ \\\\ \u0026= \\frac{\\exp(x_i -\\max_{k=1}^{B})}{\\sum_{j=1}^N \\exp(x_j - \\max_{k=1}^{B})} \\quad\\quad\\quad \\left(N = \\sum_{j=1}^{B} S_j \\right)\\\\ \\end{align*} $$\nWe first need a modified version of safe softmax that returns the local maximum and the denominator sum:\ndef safe_softmax2(x: torch.Tensor) -\u003e torch.Tensor: m = x.max() a = (x - m).exp() # subtract maximum value d = a.sum() # normalization factor return a / d, m, d Next, we create the online softmax function. It takes these local blocks and merges them by finding a global maximum and adjusting the sums accordingly:\ndef online_softmax( *blocks: Tuple[torch.Tensor, torch.Tensor, torch.Tensor] ) -\u003e torch.Tensor: p_blocks, m_blocks, d_blocks = zip(*blocks) # get global maximum m_max = torch.stack(m_blocks).max() # compute global normalizer d_total = sum( d * torch.exp(m - m_max) for d, m in zip(d_blocks, m_blocks) ) return torch.cat( [ p * d * torch.exp(m - m_max) / d_total for p, m, d in zip(p_blocks, m_blocks, d_blocks) ] ) Finally, we can verify that splitting the input into four chunks and processing them with our online softmax function gives the correct result:\nblocks = [] for chunk in list(x.chunk(4)): blocks.append(safe_softmax2(chunk)) # compute p, m, d values per chunk online = online_softmax(*blocks) print(f\"Torch: {reference}\") print(f\"Online: {online}\") print(f\"allclose: {torch.allclose(reference, online)}\") # Output Torch: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) Online: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) allclose: True Optimized Online Softmax We can make this even more efficient. Instead of tracking the max value and the sum separately, we can combine them into a single value called the logarithm of the sum of exponentiated values or Log Sum Exp (LSE). We define this as $\\text{lse}_i = m_i + \\log(d_i)$. This simplifies our global formula significantly:\n$$ \\begin{align*} \\text{OnlineSoftmax}(p_i, \\text{lse}_i) \u0026= p_i \\cdot \\frac{\\exp(\\text{lse}_{i})}{\\sum_{j=1}^{B} \\exp(\\text{lse}_j)} \\end{align*} $$\nClick for the proof $$ \\begin{align*} \\text{OnlineSoftmax}(p_i, \\text{lse}_i) \u0026= p_i \\cdot \\frac{\\exp(\\text{lse}_{i})}{\\sum_{j=1}^{B} \\exp(\\text{lse}_j)} \\\\ \\\\ \u0026= \\frac{\\exp(x_i - {\\color{orange} \\cancel{m_i}})}{{\\color{red} \\cancel{d_i}}} \\cdot \\frac{\\exp({\\color{orange} \\cancel{m_i}}) \\cdot {\\color{red} \\cancel{d_i}}}{\\sum_{j=1}^{B} \\exp(m_j) \\cdot d_j} \\\\ \\\\ \u0026= \\frac{\\exp(x_i)}{\\sum_{j=1}^{B} \\exp(m_j) \\cdot \\left[\\sum_{l=1}^{S_j} \\exp(x_l - m_j)\\right]} \\\\ \\\\ \u0026= \\frac{\\exp(x_i)}{\\sum_{j=1}^{B} \\sum_{l=1}^{S_j} \\exp(x_l - {\\color{red} \\cancel{m_j}} + {\\color{red} \\cancel{m_j}} )}\\\\ \\\\ \u0026= \\frac{\\exp(x_i)}{\\sum_{j=1}^{N} \\exp(x_j)} \\quad\\quad\\quad \\left(N = \\sum_{j=1}^{B} S_j \\right) \\end{align*} $$\nTo use this approach, we slightly modify the safe_softmax function so that it also returns the $\\text{lse}$ value instead of $m$ and $d$ separately:\ndef safe_softmax3(x: torch.Tensor) -\u003e torch.Tensor: m = x.max() a = (x - m).exp() b = a.sum() lse = m + torch.log(b) return a / b, lse # return local softmax and lse outputs The new online softmax function now uses these LSE weights to rescale the local probabilities before joining them together:\ndef online_softmax2( p_blocks = List[torch.Tensor], lse_blocks = List[torch.Tensor] ) -\u003e torch.Tensor: weights = torch.exp(torch.stack(lse_blocks)) return torch.cat([ p * w for p, w in zip(p_blocks, weights) ]) / weights.sum() This version still gives us the exact same output but with a cleaner mathematical structure:\np_blocks = [] lse_blocks = [] for chunk in list(x.chunk(4)): p, lse = safe_softmax3(chunk) # compute p, lse values per chunk p_blocks.append(p) lse_blocks.append(lse) online2 = online_softmax2(p_blocks, lse_blocks) print(f\"Torch: {reference}\") print(f\"Online2: {online2}\") print(f\"allclose: {torch.allclose(reference, online2)}\") # Output Torch: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) Online2: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) allclose: True Practical Implementation Although previous generalized version is really nice to compute global softmax by considering multiple local softmax outputs, Ring/Striped attention uses next key/value pair update softmax outpu each timet. As the data moves between GPUs, the hardware calculates attention for the local block and then passes it along:\nBecause we are only dealing with two blocks, we can simplify the formula even further. Using the property of $\\frac{1}{1 + B/A} = \\frac{A}{A + B}$: we can reduce the number of times we use the exponential function:\n$$ \\begin{align*} \\text{OnlineSoftmax}(p_i, \\text{lse}_i) \u0026= p_i \\cdot \\frac{1}{1 + \\exp(\\text{lse}_{1-i} - \\text{lse}_i)} \\quad\\quad\\quad \\left(i\\in \\{0,1\\} \\right) \\\\ \\end{align*} $$\nClick for the proof $$ \\begin{align*} \\text{OnlineSoftmax}(p_i, \\text{lse}_i) \u0026= p_i \\cdot \\frac{\\exp(\\text{lse}_{i})}{ \\exp(\\text{lse}_i) + \\exp(\\text{lse}_{1-i})} \\quad\\quad\\quad \\left(i\\in \\{0,1\\} \\right) \\\\ \\\\ \u0026= p_i \\cdot \\frac{1}{1 + \\exp(\\text{lse}_{1-i}) / \\exp(\\text{lse}_i)} \\quad\\quad \\left(\\frac{1}{1 + B/A} \\right) \\\\ \\\\ \u0026= p_i \\cdot \\frac{1}{1 + \\exp(\\text{lse}_{1-i} - \\text{lse}_i)} \\end{align*} $$\nSince our goal is to iteratively compute updated softmax value for given new $p$ and $\\text{lse}$, we also need to compute $\\text{lse}_{\\text{new}}$. Since $\\text{lse}_{i} = m_i + \\log(d_i)$, we can find $\\text{lse}_{\\text{new}}$ as follows:\n$$ \\begin{align*} \\text{lse}_{\\text{new}} \u0026= \\text{lse}_0 + \\log\\left(1 + \\exp(\\text{lse}_1 - \\exp(\\text{lse}_0)) \\right) \\end{align*} $$\nClick for the proof $$ \\begin{align*} \\text{lse}_{\\text{new}} \u0026= \\log(\\exp(\\text{lse}_0) + \\exp(\\text{lse}_1)) \\\\ \\\\ \u0026= \\log\\left(\\exp(\\text{lse}_0) \\left[1 + \\frac{ \\exp(\\text{lse}_1)}{ \\exp(\\text{lse}_0)} \\right]\\right) \\\\ \\\\ \u0026= \\text{lse}_0 + \\log\\left(1 + \\exp(\\text{lse}_1 - \\exp(\\text{lse}_0)) \\right) \\end{align*} $$\nThe implementation of this iterative update looks like this:\ndef online_softmax3( p0: torch.Tensor, lse0: torch.Tensor, p1: torch.Tensor, lse1: torch.Tensor ) -\u003e tuple[torch.Tensor, torch.Tensor]: out0 = p0 / (1 + torch.exp(lse1 - lse0)) out1 = p1 / (1 + torch.exp(lse0 - lse1)) new_lse = lse0 + torch.log(1 + torch.exp(lse1 - lse0)) return torch.cat([out0, out1]), new_lse We can now compute the global softmax result by looping through the chunks one by one:\np, lse = p_blocks[0], lse_blocks[0] for p_new, lse_new in zip(p_blocks[1:], lse_blocks[1:]): p, lse = online_softmax3(p, lse, p_new, lse_new) print(f\"Torch: {reference}\") print(f\"Online3: {p}\") print(f\"allclose: {torch.allclose(reference, p)}\") # Output Torch: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) Online: tensor([0.1085, 0.0730, 0.3312, 0.2468, 0.1182, 0.0637, 0.0182, 0.0404]) allclose: True If you look at the source code for Ring Flash Attention in PyTorch, you will see a very similar pattern. They use a function to update the output and the LSE values iteratively, which allows them to handle massive sequences across multiple GPUs:\ndef _update_out_and_lse( out: torch.Tensor, lse: torch.Tensor, block_out: torch.Tensor, block_lse: torch.Tensor, ) -\u003e Tuple[torch.Tensor, torch.Tensor]: block_out = block_out.to(torch.float32) block_lse = block_lse.transpose(-2, -1).unsqueeze(dim=-1) new_lse = lse + torch.log(1 + torch.exp(block_lse - lse)) out = torch.exp(lse - new_lse) * out + torch.exp(block_lse - new_lse) * block_out lse = new_lse return out, lse References [1] Maxim Milakov, et al. Online normalizer calculation for softmax. arXiv:1805.02867. 2018\n[2] Tri Dao, et al. FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness. arXiv:2205.14135. 2022.\n[3] Hao Liu, et al. Blockwise Parallel Transformer for Large Context Models. arXiv:2305.19370. 2023.\n[4] Hao Liu, et al. Ring Attention with Blockwise Transformers for Near-Infinite Context. arXiv:2310.01889. 2023.\n[5] William Brandon, et al. Striped Attention: Faster Ring Attention for Causal Transformers. arXiv:2311.09431. 2023.\n[6] Christian Mills. GPU Mode Blog Post. 2024.\n[7] Kilian Haefeli, et al. Blog Post. 2024.\n",
+  "wordCount" : "1985",
+  "inLanguage": "en",
+  "datePublished": "2026-01-10T23:13:49+01:00",
+  "dateModified": "2026-01-10T23:13:49+01:00",
+  "author":{
+    "@type": "Person",
+    "name": "Author: Umut Kaan Kavaklı"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://umutkavakli.github.io/posts/2026-01-10-online-softmax/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "umut's blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://umutkavakli.github.io/assets/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://umutkavakli.github.io/" accesskey="h" title="umut&#39;s blog (Alt + H)">
+                    <img src="https://umutkavakli.github.io/images/ginger_hu_37674e613bbd587b.png" alt="" aria-label="logo"
+                        height="30">umut&#39;s blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://umutkavakli.github.io/posts/" title="posts">
+                    <span>posts</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://umutkavakli.github.io/projects/" title="projects">
+                    <span>projects</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://umutkavakli.github.io/archives/" title="archives">
+                    <span>archives</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://umutkavakli.github.io/search/" title="search (Alt &#43; /)" accesskey=/>
+                    <span>search</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      Online Softmax in Attention Mechanism
+    </h1>
+    <div class="post-meta"><span title='2026-01-10 23:13:49 +0100 CET'>January 10, 2026</span>&nbsp;·&nbsp;<span>10 min</span>&nbsp;·&nbsp;<span>Author: Umut Kaan Kavaklı</span>
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#naive-softmax" aria-label="Naive Softmax">Naive Softmax</a></li>
+                <li>
+                    <a href="#safe-softmax" aria-label="Safe Softmax">Safe Softmax</a></li>
+                <li>
+                    <a href="#online-softmax" aria-label="Online Softmax">Online Softmax</a></li>
+                <li>
+                    <a href="#optimized-online-softmax" aria-label="Optimized Online Softmax">Optimized Online Softmax</a></li>
+                <li>
+                    <a href="#practical-implementation" aria-label="Practical Implementation">Practical Implementation</a></li>
+                <li>
+                    <a href="#references" aria-label="References">References</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><p><strong>Code Repository:</strong> <a href="https://github.com/umutkavakli/online-softmax">github.com/umutkavakli/online-softmax</a></p>
+<p>As sequences get longer in Transformer models, the standard approach to processing data becomes incredibly expensive and often exceeds GPU memory limits. Instead of processing the entire sequence as a single large block, we can split it into smaller chunks and merge them incrementally. This method ensures that sequence generation remains efficient and produces exact results while keeping memory usage under control.</p>
+<figure class="align-center ">
+    <img loading="lazy" src="images/onlinesoftmax.png#center"/> 
+</figure>
+
+<p>The <a href="https://en.wikipedia.org/wiki/Softmax_function">softmax</a> function is an crucial part of modern deep learning. It is especially important for the attention mechanism used in Transformer models. In self-attention, softmax converts raw similarity scores into a probability distribution. This distribution tells the model how much focus to put on each token in a sequence. We usually define scaled dot product attention like this:</p>
+<p>$$
+\text{Attention(Q, K, V)} = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}} \right) V
+$$</p>
+<p>When we calculate the dot product of queries and keys, we get an $N \times N$ a sequence of length $N$. This creates a major problem because the time and memory needed grow at a quadratic rate $O(N^2)$:</p>
+<figure class="align-center ">
+    <img loading="lazy" src="images/attention.png#center" width="70%"/> 
+</figure>
+
+<p>For very long sequences, a single GPU cannot store the entire attention matrix. The Ring Attention paper highlights just how extreme this memory demand can be:</p>
+<blockquote>
+<p>To put the memory demand in perspective, even when dealing with a batch size of 1, processing 100 million tokens requires over <strong>1000 GB</strong> of memory for a modest model with a hidden size of 1024.</p>
+</blockquote>
+<p>To solve this, we can split the attention matrix into smaller blocks and run calculations on those blocks individually:</p>
+<figure class="align-center ">
+    <img loading="lazy" src="images/attention2.png#center" width="70%"/> 
+</figure>
+
+<p>Processing in blocks is a great idea, but the standard softmax function makes it difficult because it needs the sum of every element in the sequence to calculate the denominator.</p>
+<h2 id="naive-softmax">Naive Softmax<a hidden class="anchor" aria-hidden="true" href="#naive-softmax">#</a></h2>
+<p>The standard softmax formula is defined as:</p>
+<p>$$
+\text{Softmax}(x_i) = \frac{\exp(x_i)}{\sum_{j=1}^{N} \exp(x_j)}
+$$</p>
+<p>We can write a simple version of this in PyTorch:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> torch
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">naive_softmax</span>(x: torch<span style="color:#f92672">.</span>Tensor) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> x<span style="color:#f92672">.</span>exp() <span style="color:#f92672">/</span> x<span style="color:#f92672">.</span>exp()<span style="color:#f92672">.</span>sum()
+</span></span></code></pre></div><p>If we compare this naive function to the official PyTorch version, the results look identical for small numbers:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>x <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>randn(<span style="color:#ae81ff">8</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>reference <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>softmax(x, dim<span style="color:#f92672">=-</span><span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>naive <span style="color:#f92672">=</span> naive_softmax(x)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Torch: </span><span style="color:#e6db74">{</span>reference<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Naive: </span><span style="color:#e6db74">{</span>naive<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;allclose: </span><span style="color:#e6db74">{</span>torch<span style="color:#f92672">.</span>allclose(reference, naive)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>Torch: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>Naive: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>allclose: <span style="color:#66d9ef">True</span>
+</span></span></code></pre></div><p>However, this naive version is <strong>not stable</strong>. When the input values are large, the exponential function grows too fast and causes a numerical overflow. This results in &ldquo;nan&rdquo; errors in naive softmax:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>naive_softmax(x <span style="color:#f92672">*</span> <span style="color:#ae81ff">1000</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>tensor([<span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, nan, nan, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>])
+</span></span></code></pre></div><h2 id="safe-softmax">Safe Softmax<a hidden class="anchor" aria-hidden="true" href="#safe-softmax">#</a></h2>
+<p>Softmax has the <strong>shift invariance</strong> property. This means that if we add or subtract the same constant from every input, the output stays the same. We can use this to keep our numbers small and manageable. By subtracting the maximum value from the entire vector, we ensure that the largest exponent is exactly zero.</p>
+<p>$$
+\begin{align*}
+\text{SafeSoftmax}(x_i) &amp;=  \frac{\exp(x_i)}{\sum_{j=1}^{N} \exp(x_j)} \cdot \frac{\exp(- \max_{k=1}^{N} x_k)}{\exp(- \max_{k=1}^{N} x_k)} \\
+\\
+&amp;= \frac{\exp(x_i -  \max_{k=1}^{N} x_k)}{\sum_{j=1}^{N} \exp(x_j -  \max_{k=1}^{N} x_k)}
+\end{align*}
+$$</p>
+<p>By doing this, every exponent is less than or equal to zero, which completely prevents overflow. Here is how we implement it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">safe_softmax</span>(x: torch<span style="color:#f92672">.</span>Tensor) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    m <span style="color:#f92672">=</span> x<span style="color:#f92672">.</span>max()
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> (x <span style="color:#f92672">-</span> m)<span style="color:#f92672">.</span>exp() <span style="color:#f92672">/</span> (x <span style="color:#f92672">-</span> m)<span style="color:#f92672">.</span>exp()<span style="color:#f92672">.</span>sum()
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>reference <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>softmax(x, dim<span style="color:#f92672">=-</span><span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>safe <span style="color:#f92672">=</span> safe_softmax(x)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Torch: </span><span style="color:#e6db74">{</span>reference<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Safe: </span><span style="color:#e6db74">{</span>safe<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;allclose: </span><span style="color:#e6db74">{</span>torch<span style="color:#f92672">.</span>allclose(reference, safe)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>Torch: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>Safe: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>allclose: <span style="color:#66d9ef">True</span>
+</span></span></code></pre></div><p>This version is also stable for large inputs:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>safe_softmax(x <span style="color:#f92672">*</span> <span style="color:#ae81ff">1000</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>tensor([<span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">1.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>, <span style="color:#ae81ff">0.</span>])
+</span></span></code></pre></div><h2 id="online-softmax">Online Softmax<a hidden class="anchor" aria-hidden="true" href="#online-softmax">#</a></h2>
+<p>In the attention mechanism, we apply softmax row by row. To calculate the denominator for a single query, we need to access every single key vector in that row. This global dependency is exactly what makes it hard to process the matrix in chunks:</p>
+<figure class="align-center ">
+    <img loading="lazy" src="images/attention3.png#center" width="70%"/> 
+</figure>
+
+<p>Online softmax allows us to calculate the result step by step. If we track the local maximum $m$ and the local sum $d$ for each small block, we can update them as we move through the sequence. When we receive a new element $x_S$, we update our statistics like this:</p>
+<p>$$
+\begin{align*}
+m_S &amp;\leftarrow  \max(m_{S-1}, x_S) \\
+\\
+d_S &amp;\leftarrow d_{S-1} \cdot\exp(m_{S-1} - m_S) + \exp(x_{S} - m_S)
+\end{align*}
+$$</p>
+
+<details>
+  <summary>Click for the proof</summary>
+  <p>$$
+\begin{align*}
+m_S &amp;\leftarrow \max(m_{S-1}, x_S) \\
+&amp;= \max(\max_{k=1}^{S-1} x_k, x_S) \\
+&amp;= \max_{k=1}^{S} x_k \\
+\\
+d_S &amp;\leftarrow d_{S-1} \cdot\exp(m_{S-1} - m_S) + \exp(x_{S} - m_S) \\
+&amp;= \left(\sum_{j=1}^{S-1} \exp(x_j - {\color{red} \cancel{m_{S-1}}}) \right) \cdot \exp({\color{red} \cancel{m_{S-1}}} - m_S) + \exp(x_{S} - m_S) \\
+&amp;= \left(\sum_{j=1}^{S-1} \exp(x_j - m_{S}) \right) + \exp(x_{S} - m_S) \\
+&amp;= \sum_{j=1}^{S} \exp(x_j - m_{S})
+\end{align*}
+$$</p>
+</details>
+
+<p>This logic allows us to merge several local results into one global distribution. If we have $B$ blocks, each with its own max value $m_i$ and sum $d_i$, we can combine them by rescaling the local probabilities. This approach perfectly matches the standard softmax output:</p>
+<p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, m_i, d_i) &amp;= \frac{p_i \cdot d_i \cdot \exp(m_i -\max_{k=1}^{B})}{\sum_{j=1}^B d_j \cdot \exp(m_j - \max_{k=1}^{B})} \\
+\end{align*}
+$$</p>
+
+<details>
+  <summary>Click for the proof</summary>
+  <p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, m_i, d_i) &amp;= \frac{p_i \cdot d_i \cdot \exp(m_i -\max_{k=1}^{B})}{\sum_{j=1}^B d_j \cdot \exp(m_j - \max_{k=1}^{B})} \\
+\\
+&amp;= \frac{\frac{\exp(x_i - m_i)}{{\color{red} \cancel{d_i}}} \cdot {\color{red} \cancel{d_i}} \cdot \exp(m_i -\max_{k=1}^{B})}{\sum_{j=1}^B d_j \cdot \exp(m_j - \max_{k=1}^{B})} \\
+\\
+&amp;= \frac{\exp(x_i - {\color{red} \cancel{m_i}}) \cdot  \exp({\color{red} \cancel{m_i}} -\max_{k=1}^{B})}{\sum_{j=1}^B d_j \cdot \exp(m_j - \max_{k=1}^{B})} \\
+\\
+&amp;= \frac{\exp(x_i -\max_{k=1}^{B})}{\sum_{j=1}^B d_j \cdot \exp(m_j - \max_{k=1}^{B})} \\
+\\
+&amp;= \frac{\exp(x_i -\max_{k=1}^{B})}{\sum_{j=1}^B \left[\sum_{l=1}^{S_j} \exp(x_l - {\color{red} \cancel{m_i}}) \right] \cdot \exp({\color{red} \cancel{m_i}} - \max_{k=1}^{B})} \\
+\\
+&amp;= \frac{\exp(x_i -\max_{k=1}^{B})}{\sum_{j=1}^N \exp(x_j - \max_{k=1}^{B})} \quad\quad\quad \left(N = \sum_{j=1}^{B} S_j \right)\\
+\end{align*}
+$$</p>
+</details>
+
+<p>We first need a modified version of safe softmax that returns the local maximum and the denominator sum:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">safe_softmax2</span>(x: torch<span style="color:#f92672">.</span>Tensor) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    m <span style="color:#f92672">=</span> x<span style="color:#f92672">.</span>max()
+</span></span><span style="display:flex;"><span>    a <span style="color:#f92672">=</span> (x <span style="color:#f92672">-</span> m)<span style="color:#f92672">.</span>exp() <span style="color:#75715e"># subtract maximum value</span>
+</span></span><span style="display:flex;"><span>    d <span style="color:#f92672">=</span> a<span style="color:#f92672">.</span>sum() <span style="color:#75715e"># normalization factor</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> a <span style="color:#f92672">/</span> d, m, d
+</span></span></code></pre></div><p>Next, we create the online softmax function. It takes these local blocks and merges them by finding a global maximum and adjusting the sums accordingly:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">online_softmax</span>(
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">*</span>blocks: Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]
+</span></span><span style="display:flex;"><span>) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    p_blocks, m_blocks, d_blocks <span style="color:#f92672">=</span> zip(<span style="color:#f92672">*</span>blocks)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># get global maximum</span>
+</span></span><span style="display:flex;"><span>    m_max <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>stack(m_blocks)<span style="color:#f92672">.</span>max()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e"># compute global normalizer</span>
+</span></span><span style="display:flex;"><span>    d_total <span style="color:#f92672">=</span> sum(
+</span></span><span style="display:flex;"><span>        d <span style="color:#f92672">*</span> torch<span style="color:#f92672">.</span>exp(m <span style="color:#f92672">-</span> m_max)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">for</span> d, m <span style="color:#f92672">in</span> zip(d_blocks, m_blocks)
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> torch<span style="color:#f92672">.</span>cat(
+</span></span><span style="display:flex;"><span>        [
+</span></span><span style="display:flex;"><span>            p <span style="color:#f92672">*</span> d <span style="color:#f92672">*</span> torch<span style="color:#f92672">.</span>exp(m <span style="color:#f92672">-</span> m_max) <span style="color:#f92672">/</span> d_total
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">for</span> p, m, d <span style="color:#f92672">in</span> zip(p_blocks, m_blocks, d_blocks)
+</span></span><span style="display:flex;"><span>        ]
+</span></span><span style="display:flex;"><span>    )
+</span></span></code></pre></div><p>Finally, we can verify that splitting the input into four chunks and processing them with our online softmax function gives the correct result:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>blocks <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> chunk <span style="color:#f92672">in</span> list(x<span style="color:#f92672">.</span>chunk(<span style="color:#ae81ff">4</span>)):
+</span></span><span style="display:flex;"><span>    blocks<span style="color:#f92672">.</span>append(safe_softmax2(chunk)) <span style="color:#75715e"># compute p, m, d values per chunk</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>online <span style="color:#f92672">=</span> online_softmax(<span style="color:#f92672">*</span>blocks)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Torch: </span><span style="color:#e6db74">{</span>reference<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Online: </span><span style="color:#e6db74">{</span>online<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;allclose: </span><span style="color:#e6db74">{</span>torch<span style="color:#f92672">.</span>allclose(reference, online)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>Torch: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>Online: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>allclose: <span style="color:#66d9ef">True</span>
+</span></span></code></pre></div><h2 id="optimized-online-softmax">Optimized Online Softmax<a hidden class="anchor" aria-hidden="true" href="#optimized-online-softmax">#</a></h2>
+<p>We can make this even more efficient. Instead of tracking the max value and the sum separately, we can combine them into a single value called the <strong>logarithm of the sum of exponentiated values</strong> or <strong>Log Sum Exp (LSE)</strong>. We define this as $\text{lse}_i = m_i + \log(d_i)$. This simplifies our global formula significantly:</p>
+<p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, \text{lse}_i) &amp;= p_i \cdot \frac{\exp(\text{lse}_{i})}{\sum_{j=1}^{B} \exp(\text{lse}_j)}
+\end{align*}
+$$</p>
+
+<details>
+  <summary>Click for the proof</summary>
+  <p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, \text{lse}_i) &amp;= p_i \cdot \frac{\exp(\text{lse}_{i})}{\sum_{j=1}^{B} \exp(\text{lse}_j)} \\
+\\
+&amp;= \frac{\exp(x_i - {\color{orange} \cancel{m_i}})}{{\color{red} \cancel{d_i}}} \cdot \frac{\exp({\color{orange} \cancel{m_i}}) \cdot {\color{red} \cancel{d_i}}}{\sum_{j=1}^{B} \exp(m_j) \cdot d_j} \\
+\\
+&amp;= \frac{\exp(x_i)}{\sum_{j=1}^{B} \exp(m_j) \cdot \left[\sum_{l=1}^{S_j} \exp(x_l - m_j)\right]} \\
+\\
+&amp;= \frac{\exp(x_i)}{\sum_{j=1}^{B} \sum_{l=1}^{S_j} \exp(x_l - {\color{red} \cancel{m_j}} + {\color{red} \cancel{m_j}} )}\\
+\\
+&amp;= \frac{\exp(x_i)}{\sum_{j=1}^{N} \exp(x_j)} \quad\quad\quad \left(N = \sum_{j=1}^{B} S_j \right)
+\end{align*}
+$$</p>
+</details>
+
+<p>To use this approach, we slightly modify the <code>safe_softmax</code> function so that it also returns the $\text{lse}$ value instead of $m$ and $d$ separately:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">safe_softmax3</span>(x: torch<span style="color:#f92672">.</span>Tensor) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    m <span style="color:#f92672">=</span> x<span style="color:#f92672">.</span>max()
+</span></span><span style="display:flex;"><span>    a <span style="color:#f92672">=</span> (x <span style="color:#f92672">-</span> m)<span style="color:#f92672">.</span>exp()
+</span></span><span style="display:flex;"><span>    b <span style="color:#f92672">=</span> a<span style="color:#f92672">.</span>sum()
+</span></span><span style="display:flex;"><span>    lse <span style="color:#f92672">=</span> m <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>log(b)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> a <span style="color:#f92672">/</span> b, lse <span style="color:#75715e"># return local softmax and lse outputs</span>
+</span></span></code></pre></div><p>The new online softmax function now uses these LSE weights to rescale the local probabilities before joining them together:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">online_softmax2</span>(
+</span></span><span style="display:flex;"><span>    p_blocks <span style="color:#f92672">=</span> List[torch<span style="color:#f92672">.</span>Tensor],
+</span></span><span style="display:flex;"><span>    lse_blocks <span style="color:#f92672">=</span> List[torch<span style="color:#f92672">.</span>Tensor]
+</span></span><span style="display:flex;"><span>) <span style="color:#f92672">-&gt;</span> torch<span style="color:#f92672">.</span>Tensor:
+</span></span><span style="display:flex;"><span>    weights <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>exp(torch<span style="color:#f92672">.</span>stack(lse_blocks))         
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> torch<span style="color:#f92672">.</span>cat([
+</span></span><span style="display:flex;"><span>            p <span style="color:#f92672">*</span> w
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">for</span> p, w <span style="color:#f92672">in</span> zip(p_blocks, weights)
+</span></span><span style="display:flex;"><span>        ]) <span style="color:#f92672">/</span> weights<span style="color:#f92672">.</span>sum()
+</span></span></code></pre></div><p>This version still gives us the exact same output but with a cleaner mathematical structure:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>p_blocks <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span>lse_blocks <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> chunk <span style="color:#f92672">in</span> list(x<span style="color:#f92672">.</span>chunk(<span style="color:#ae81ff">4</span>)):
+</span></span><span style="display:flex;"><span>    p, lse <span style="color:#f92672">=</span> safe_softmax3(chunk) <span style="color:#75715e"># compute p, lse values per chunk</span>
+</span></span><span style="display:flex;"><span>    p_blocks<span style="color:#f92672">.</span>append(p)
+</span></span><span style="display:flex;"><span>    lse_blocks<span style="color:#f92672">.</span>append(lse)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>online2 <span style="color:#f92672">=</span> online_softmax2(p_blocks, lse_blocks)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Torch: </span><span style="color:#e6db74">{</span>reference<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Online2: </span><span style="color:#e6db74">{</span>online2<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;allclose: </span><span style="color:#e6db74">{</span>torch<span style="color:#f92672">.</span>allclose(reference, online2)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>Torch: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>Online2: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>allclose: <span style="color:#66d9ef">True</span>
+</span></span></code></pre></div><h2 id="practical-implementation">Practical Implementation<a hidden class="anchor" aria-hidden="true" href="#practical-implementation">#</a></h2>
+<p>Although previous generalized version is really nice to compute global softmax by considering multiple local softmax outputs, Ring/Striped attention uses next key/value pair update softmax outpu each timet. As the data moves between GPUs, the hardware calculates attention for the local block and then passes it along:</p>
+<figure class="align-center ">
+    <img loading="lazy" src="images/ring.png#center"/> 
+</figure>
+
+<p>Because we are only dealing with two blocks, we can simplify the formula even further. Using the property of $\frac{1}{1 + B/A} = \frac{A}{A + B}$: we can reduce the number of times we use the exponential function:</p>
+<p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, \text{lse}_i) &amp;= p_i \cdot \frac{1}{1 +  \exp(\text{lse}_{1-i} - \text{lse}_i)} \quad\quad\quad \left(i\in \{0,1\} \right) \\
+\end{align*}
+$$</p>
+
+<details>
+  <summary>Click for the proof</summary>
+  <p>$$
+\begin{align*}
+\text{OnlineSoftmax}(p_i, \text{lse}_i) &amp;= p_i \cdot \frac{\exp(\text{lse}_{i})}{ \exp(\text{lse}_i) + \exp(\text{lse}_{1-i})} \quad\quad\quad \left(i\in \{0,1\} \right) \\
+\\
+&amp;= p_i \cdot \frac{1}{1 +  \exp(\text{lse}_{1-i}) / \exp(\text{lse}_i)} \quad\quad \left(\frac{1}{1 + B/A} \right) \\
+\\
+&amp;= p_i \cdot \frac{1}{1 +  \exp(\text{lse}_{1-i} - \text{lse}_i)}
+\end{align*}
+$$</p>
+</details>
+
+<p>Since our goal is to iteratively compute updated softmax value for given new $p$ and $\text{lse}$, we also need to compute $\text{lse}_{\text{new}}$. Since $\text{lse}_{i} = m_i + \log(d_i)$, we can find $\text{lse}_{\text{new}}$ as follows:</p>
+<p>$$
+\begin{align*}
+\text{lse}_{\text{new}} &amp;= \text{lse}_0 +  \log\left(1 + \exp(\text{lse}_1 - \exp(\text{lse}_0)) \right)
+\end{align*}
+$$</p>
+
+<details>
+  <summary>Click for the proof</summary>
+  <p>$$
+\begin{align*}
+\text{lse}_{\text{new}} &amp;= \log(\exp(\text{lse}_0) + \exp(\text{lse}_1)) \\
+\\
+&amp;= \log\left(\exp(\text{lse}_0) \left[1 + \frac{ \exp(\text{lse}_1)}{ \exp(\text{lse}_0)} \right]\right) \\
+\\
+&amp;= \text{lse}_0 +  \log\left(1 + \exp(\text{lse}_1 - \exp(\text{lse}_0)) \right)
+\end{align*}
+$$</p>
+</details>
+
+<p>The implementation of this iterative update looks like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">online_softmax3</span>(
+</span></span><span style="display:flex;"><span>    p0: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    lse0: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    p1: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    lse1: torch<span style="color:#f92672">.</span>Tensor
+</span></span><span style="display:flex;"><span>) <span style="color:#f92672">-&gt;</span> tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]:
+</span></span><span style="display:flex;"><span>    out0 <span style="color:#f92672">=</span> p0 <span style="color:#f92672">/</span> (<span style="color:#ae81ff">1</span> <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>exp(lse1 <span style="color:#f92672">-</span> lse0))
+</span></span><span style="display:flex;"><span>    out1 <span style="color:#f92672">=</span> p1 <span style="color:#f92672">/</span> (<span style="color:#ae81ff">1</span> <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>exp(lse0 <span style="color:#f92672">-</span> lse1))
+</span></span><span style="display:flex;"><span>    new_lse <span style="color:#f92672">=</span> lse0 <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>log(<span style="color:#ae81ff">1</span> <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>exp(lse1 <span style="color:#f92672">-</span> lse0))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> torch<span style="color:#f92672">.</span>cat([out0, out1]), new_lse
+</span></span></code></pre></div><p>We can now compute the global softmax result by looping through the chunks one by one:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>p, lse <span style="color:#f92672">=</span> p_blocks[<span style="color:#ae81ff">0</span>], lse_blocks[<span style="color:#ae81ff">0</span>]
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> p_new, lse_new <span style="color:#f92672">in</span> zip(p_blocks[<span style="color:#ae81ff">1</span>:], lse_blocks[<span style="color:#ae81ff">1</span>:]):
+</span></span><span style="display:flex;"><span>    p, lse <span style="color:#f92672">=</span> online_softmax3(p, lse, p_new, lse_new)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Torch: </span><span style="color:#e6db74">{</span>reference<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Online3: </span><span style="color:#e6db74">{</span>p<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;allclose: </span><span style="color:#e6db74">{</span>torch<span style="color:#f92672">.</span>allclose(reference, p)<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># Output</span>
+</span></span><span style="display:flex;"><span>Torch: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>Online: tensor([<span style="color:#ae81ff">0.1085</span>, <span style="color:#ae81ff">0.0730</span>, <span style="color:#ae81ff">0.3312</span>, <span style="color:#ae81ff">0.2468</span>, <span style="color:#ae81ff">0.1182</span>, <span style="color:#ae81ff">0.0637</span>, <span style="color:#ae81ff">0.0182</span>, <span style="color:#ae81ff">0.0404</span>])
+</span></span><span style="display:flex;"><span>allclose: <span style="color:#66d9ef">True</span>
+</span></span></code></pre></div><p>If you look at the source code for <a href="https://github.com/zhuzilin/ring-flash-attention/blob/55ff66fd35f329dfcc24ce7a448bfdd532865966/ring_flash_attn/utils.py#L10C1-L24C20">Ring Flash Attention in PyTorch</a>, you will see a very similar pattern. They use a function to update the output and the LSE values iteratively, which allows them to handle massive sequences across multiple GPUs:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_update_out_and_lse</span>(
+</span></span><span style="display:flex;"><span>    out: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    lse: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    block_out: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>    block_lse: torch<span style="color:#f92672">.</span>Tensor,
+</span></span><span style="display:flex;"><span>) <span style="color:#f92672">-&gt;</span> Tuple[torch<span style="color:#f92672">.</span>Tensor, torch<span style="color:#f92672">.</span>Tensor]:
+</span></span><span style="display:flex;"><span>    block_out <span style="color:#f92672">=</span> block_out<span style="color:#f92672">.</span>to(torch<span style="color:#f92672">.</span>float32)
+</span></span><span style="display:flex;"><span>    block_lse <span style="color:#f92672">=</span> block_lse<span style="color:#f92672">.</span>transpose(<span style="color:#f92672">-</span><span style="color:#ae81ff">2</span>, <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>)<span style="color:#f92672">.</span>unsqueeze(dim<span style="color:#f92672">=-</span><span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    new_lse <span style="color:#f92672">=</span> lse <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>log(<span style="color:#ae81ff">1</span> <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>exp(block_lse <span style="color:#f92672">-</span> lse))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    out <span style="color:#f92672">=</span> torch<span style="color:#f92672">.</span>exp(lse <span style="color:#f92672">-</span> new_lse) <span style="color:#f92672">*</span> out <span style="color:#f92672">+</span> torch<span style="color:#f92672">.</span>exp(block_lse <span style="color:#f92672">-</span> new_lse) <span style="color:#f92672">*</span> block_out
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    lse <span style="color:#f92672">=</span> new_lse
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> out, lse
+</span></span></code></pre></div><h2 id="references">References<a hidden class="anchor" aria-hidden="true" href="#references">#</a></h2>
+<p>[1] Maxim Milakov, et al. <a href="https://arxiv.org/abs/1805.02867">Online normalizer calculation for softmax.</a> arXiv:1805.02867. 2018</p>
+<p>[2] Tri Dao, et al. <a href="https://arxiv.org/abs/2205.14135">FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness.</a> arXiv:2205.14135. 2022.</p>
+<p>[3] Hao Liu, et al. <a href="https://arxiv.org/abs/2305.19370">Blockwise Parallel Transformer for Large Context Models.</a> arXiv:2305.19370. 2023.</p>
+<p>[4] Hao Liu, et al. <a href="https://arxiv.org/abs/2310.01889">Ring Attention with Blockwise Transformers for Near-Infinite Context.</a> arXiv:2310.01889. 2023.</p>
+<p>[5] William Brandon, et al. <a href="https://arxiv.org/abs/2311.09431">Striped Attention: Faster Ring Attention for Causal Transformers.</a> arXiv:2311.09431. 2023.</p>
+<p>[6] Christian Mills. <a href="https://christianjmills.com/posts/cuda-mode-notes/lecture-013/">GPU Mode Blog Post.</a> 2024.</p>
+<p>[7] Kilian Haefeli, et al. <a href="https://coconut-mode.com/posts/ring-attention">Blog Post</a>. 2024.</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+    </ul>
+
+<ul class="share-buttons">
+    <li>
+        <a target="_blank" rel="noopener noreferrer" aria-label="share Online Softmax in Attention Mechanism on x"
+            href="https://x.com/intent/tweet/?text=Online%20Softmax%20in%20Attention%20Mechanism&amp;url=https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f&amp;hashtags=">
+            <svg version="1.1" viewBox="0 0 512 512" xml:space="preserve" height="30px" width="30px" fill="currentColor">
+                <path
+                    d="M512 62.554 L 512 449.446 C 512 483.97 483.97 512 449.446 512 L 62.554 512 C 28.03 512 0 483.97 0 449.446 L 0 62.554 C 0 28.03 28.029 0 62.554 0 L 449.446 0 C 483.971 0 512 28.03 512 62.554 Z M 269.951 190.75 L 182.567 75.216 L 56 75.216 L 207.216 272.95 L 63.9 436.783 L 125.266 436.783 L 235.9 310.383 L 332.567 436.783 L 456 436.783 L 298.367 228.367 L 432.367 75.216 L 371.033 75.216 Z M 127.633 110 L 164.101 110 L 383.481 400.065 L 349.5 400.065 Z" />
+            </svg>
+        </a>
+    </li>
+    <li>
+        <a target="_blank" rel="noopener noreferrer" aria-label="share Online Softmax in Attention Mechanism on linkedin"
+            href="https://www.linkedin.com/shareArticle?mini=true&amp;url=https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f&amp;title=Online%20Softmax%20in%20Attention%20Mechanism&amp;summary=Online%20Softmax%20in%20Attention%20Mechanism&amp;source=https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f">
+            <svg version="1.1" viewBox="0 0 512 512" xml:space="preserve" height="30px" width="30px" fill="currentColor">
+                <path
+                    d="M449.446,0c34.525,0 62.554,28.03 62.554,62.554l0,386.892c0,34.524 -28.03,62.554 -62.554,62.554l-386.892,0c-34.524,0 -62.554,-28.03 -62.554,-62.554l0,-386.892c0,-34.524 28.029,-62.554 62.554,-62.554l386.892,0Zm-288.985,423.278l0,-225.717l-75.04,0l0,225.717l75.04,0Zm270.539,0l0,-129.439c0,-69.333 -37.018,-101.586 -86.381,-101.586c-39.804,0 -57.634,21.891 -67.617,37.266l0,-31.958l-75.021,0c0.995,21.181 0,225.717 0,225.717l75.02,0l0,-126.056c0,-6.748 0.486,-13.492 2.474,-18.315c5.414,-13.475 17.767,-27.434 38.494,-27.434c27.135,0 38.007,20.707 38.007,51.037l0,120.768l75.024,0Zm-307.552,-334.556c-25.674,0 -42.448,16.879 -42.448,39.002c0,21.658 16.264,39.002 41.455,39.002l0.484,0c26.165,0 42.452,-17.344 42.452,-39.002c-0.485,-22.092 -16.241,-38.954 -41.943,-39.002Z" />
+            </svg>
+        </a>
+    </li>
+    <li>
+        <a target="_blank" rel="noopener noreferrer" aria-label="share Online Softmax in Attention Mechanism on reddit"
+            href="https://reddit.com/submit?url=https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f&title=Online%20Softmax%20in%20Attention%20Mechanism">
+            <svg version="1.1" viewBox="0 0 512 512" xml:space="preserve" height="30px" width="30px" fill="currentColor">
+                <path
+                    d="M449.446,0c34.525,0 62.554,28.03 62.554,62.554l0,386.892c0,34.524 -28.03,62.554 -62.554,62.554l-386.892,0c-34.524,0 -62.554,-28.03 -62.554,-62.554l0,-386.892c0,-34.524 28.029,-62.554 62.554,-62.554l386.892,0Zm-3.446,265.638c0,-22.964 -18.616,-41.58 -41.58,-41.58c-11.211,0 -21.361,4.457 -28.841,11.666c-28.424,-20.508 -67.586,-33.757 -111.204,-35.278l18.941,-89.121l61.884,13.157c0.756,15.734 13.642,28.29 29.56,28.29c16.407,0 29.706,-13.299 29.706,-29.701c0,-16.403 -13.299,-29.702 -29.706,-29.702c-11.666,0 -21.657,6.792 -26.515,16.578l-69.105,-14.69c-1.922,-0.418 -3.939,-0.042 -5.585,1.036c-1.658,1.073 -2.811,2.761 -3.224,4.686l-21.152,99.438c-44.258,1.228 -84.046,14.494 -112.837,35.232c-7.468,-7.164 -17.589,-11.591 -28.757,-11.591c-22.965,0 -41.585,18.616 -41.585,41.58c0,16.896 10.095,31.41 24.568,37.918c-0.639,4.135 -0.99,8.328 -0.99,12.576c0,63.977 74.469,115.836 166.33,115.836c91.861,0 166.334,-51.859 166.334,-115.836c0,-4.218 -0.347,-8.387 -0.977,-12.493c14.564,-6.47 24.735,-21.034 24.735,-38.001Zm-119.474,108.193c-20.27,20.241 -59.115,21.816 -70.534,21.816c-11.428,0 -50.277,-1.575 -70.522,-21.82c-3.007,-3.008 -3.007,-7.882 0,-10.889c3.003,-2.999 7.882,-3.003 10.885,0c12.777,12.781 40.11,17.317 59.637,17.317c19.522,0 46.86,-4.536 59.657,-17.321c3.016,-2.999 7.886,-2.995 10.885,0.008c3.008,3.011 3.003,7.882 -0.008,10.889Zm-5.23,-48.781c-16.373,0 -29.701,-13.324 -29.701,-29.698c0,-16.381 13.328,-29.714 29.701,-29.714c16.378,0 29.706,13.333 29.706,29.714c0,16.374 -13.328,29.698 -29.706,29.698Zm-160.386,-29.702c0,-16.381 13.328,-29.71 29.714,-29.71c16.369,0 29.689,13.329 29.689,29.71c0,16.373 -13.32,29.693 -29.689,29.693c-16.386,0 -29.714,-13.32 -29.714,-29.693Z" />
+            </svg>
+        </a>
+    </li>
+    <li>
+        <a target="_blank" rel="noopener noreferrer" aria-label="share Online Softmax in Attention Mechanism on whatsapp"
+            href="https://api.whatsapp.com/send?text=Online%20Softmax%20in%20Attention%20Mechanism%20-%20https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f">
+            <svg version="1.1" viewBox="0 0 512 512" xml:space="preserve" height="30px" width="30px" fill="currentColor">
+                <path
+                    d="M449.446,0c34.525,0 62.554,28.03 62.554,62.554l0,386.892c0,34.524 -28.03,62.554 -62.554,62.554l-386.892,0c-34.524,0 -62.554,-28.03 -62.554,-62.554l0,-386.892c0,-34.524 28.029,-62.554 62.554,-62.554l386.892,0Zm-58.673,127.703c-33.842,-33.881 -78.847,-52.548 -126.798,-52.568c-98.799,0 -179.21,80.405 -179.249,179.234c-0.013,31.593 8.241,62.428 23.927,89.612l-25.429,92.884l95.021,-24.925c26.181,14.28 55.659,21.807 85.658,21.816l0.074,0c98.789,0 179.206,-80.413 179.247,-179.243c0.018,-47.895 -18.61,-92.93 -52.451,-126.81Zm-126.797,275.782l-0.06,0c-26.734,-0.01 -52.954,-7.193 -75.828,-20.767l-5.441,-3.229l-56.386,14.792l15.05,-54.977l-3.542,-5.637c-14.913,-23.72 -22.791,-51.136 -22.779,-79.287c0.033,-82.142 66.867,-148.971 149.046,-148.971c39.793,0.014 77.199,15.531 105.329,43.692c28.128,28.16 43.609,65.592 43.594,105.4c-0.034,82.149 -66.866,148.983 -148.983,148.984Zm81.721,-111.581c-4.479,-2.242 -26.499,-13.075 -30.604,-14.571c-4.105,-1.495 -7.091,-2.241 -10.077,2.241c-2.986,4.483 -11.569,14.572 -14.182,17.562c-2.612,2.988 -5.225,3.364 -9.703,1.12c-4.479,-2.241 -18.91,-6.97 -36.017,-22.23c-13.314,-11.876 -22.304,-26.542 -24.916,-31.026c-2.612,-4.484 -0.279,-6.908 1.963,-9.14c2.016,-2.007 4.48,-5.232 6.719,-7.847c2.24,-2.615 2.986,-4.484 4.479,-7.472c1.493,-2.99 0.747,-5.604 -0.374,-7.846c-1.119,-2.241 -10.077,-24.288 -13.809,-33.256c-3.635,-8.733 -7.327,-7.55 -10.077,-7.688c-2.609,-0.13 -5.598,-0.158 -8.583,-0.158c-2.986,0 -7.839,1.121 -11.944,5.604c-4.105,4.484 -15.675,15.32 -15.675,37.364c0,22.046 16.048,43.342 18.287,46.332c2.24,2.99 31.582,48.227 76.511,67.627c10.685,4.615 19.028,7.371 25.533,9.434c10.728,3.41 20.492,2.929 28.209,1.775c8.605,-1.285 26.499,-10.833 30.231,-21.295c3.732,-10.464 3.732,-19.431 2.612,-21.298c-1.119,-1.869 -4.105,-2.99 -8.583,-5.232Z" />
+            </svg>
+        </a>
+    </li>
+    <li>
+        <a target="_blank" rel="noopener noreferrer" aria-label="share Online Softmax in Attention Mechanism on telegram"
+            href="https://telegram.me/share/url?text=Online%20Softmax%20in%20Attention%20Mechanism&amp;url=https%3a%2f%2fumutkavakli.github.io%2fposts%2f2026-01-10-online-softmax%2f">
+            <svg version="1.1" xml:space="preserve" viewBox="2 2 28 28" height="30px" width="30px" fill="currentColor">
+                <path
+                    d="M26.49,29.86H5.5a3.37,3.37,0,0,1-2.47-1,3.35,3.35,0,0,1-1-2.47V5.48A3.36,3.36,0,0,1,3,3,3.37,3.37,0,0,1,5.5,2h21A3.38,3.38,0,0,1,29,3a3.36,3.36,0,0,1,1,2.46V26.37a3.35,3.35,0,0,1-1,2.47A3.38,3.38,0,0,1,26.49,29.86Zm-5.38-6.71a.79.79,0,0,0,.85-.66L24.73,9.24a.55.55,0,0,0-.18-.46.62.62,0,0,0-.41-.17q-.08,0-16.53,6.11a.59.59,0,0,0-.41.59.57.57,0,0,0,.43.52l4,1.24,1.61,4.83a.62.62,0,0,0,.63.43.56.56,0,0,0,.4-.17L16.54,20l4.09,3A.9.9,0,0,0,21.11,23.15ZM13.8,20.71l-1.21-4q8.72-5.55,8.78-5.55c.15,0,.23,0,.23.16a.18.18,0,0,1,0,.06s-2.51,2.3-7.52,6.8Z" />
+            </svg>
+        </a>
+    </li>
+</ul>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://umutkavakli.github.io/">umut&#39;s blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
